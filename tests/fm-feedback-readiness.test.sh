@@ -2,6 +2,7 @@
 # Executable lifecycle test: a live readiness read revokes checks-passed and
 # permits a fresh ready handback only after the same current head passes.
 set -u
+# shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 ROOT_CASE=$(fm_test_tmproot fm-feedback-readiness)
@@ -48,7 +49,7 @@ case "$output" in *"state: blocked"*feedback-blocked*) ;; *) fail "expected bloc
 output=$(env FM_READINESS=pass PATH="$ROOT_CASE/bin:$PATH" FM_HOME="$ROOT_CASE" FM_STATE_OVERRIDE="$ROOT_CASE/state" FM_ROOT_OVERRIDE="$ROOT" \
   "$ROOT/bin/fm-crew-state.sh" crew)
 case "$output" in *"state: done"*) ;; *) fail "expected fresh ready handback, got: $output" ;; esac
-FM_READINESS=unreadable output=$(env FM_READINESS=unreadable PATH="$ROOT_CASE/bin:$PATH" FM_HOME="$ROOT_CASE" FM_STATE_OVERRIDE="$ROOT_CASE/state" FM_ROOT_OVERRIDE="$ROOT" \
+output=$(env FM_READINESS=unreadable PATH="$ROOT_CASE/bin:$PATH" FM_HOME="$ROOT_CASE" FM_STATE_OVERRIDE="$ROOT_CASE/state" FM_ROOT_OVERRIDE="$ROOT" \
   "$ROOT/bin/fm-crew-state.sh" crew)
 case "$output" in *"state: blocked"*feedback-blocked*) ;; *) fail "expected unreadable readiness to block, got: $output" ;; esac
 pass "feedback readiness lifecycle"
