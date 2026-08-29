@@ -24,6 +24,7 @@ fi
 if [ "${1:-}" = axi ] && [ "${2:-}" = logs ]; then echo 'all CI checks passed - still monitoring until merged or closed'; exit 0; fi
 if [ "${1:-}" = axi ] && [ "${2:-}" = pr-readiness ]; then
   [ "${FM_READINESS:-fail}" = pass ] && exit 0
+  # fail/unreadable/stale are all fail-closed at the lifecycle surface.
   exit 1
 fi
 exit 0
@@ -47,4 +48,7 @@ case "$output" in *"state: blocked"*feedback-blocked*) ;; *) fail "expected bloc
 output=$(env FM_READINESS=pass PATH="$ROOT_CASE/bin:$PATH" FM_HOME="$ROOT_CASE" FM_STATE_OVERRIDE="$ROOT_CASE/state" FM_ROOT_OVERRIDE="$ROOT" \
   "$ROOT/bin/fm-crew-state.sh" crew)
 case "$output" in *"state: done"*) ;; *) fail "expected fresh ready handback, got: $output" ;; esac
+FM_READINESS=unreadable output=$(env FM_READINESS=unreadable PATH="$ROOT_CASE/bin:$PATH" FM_HOME="$ROOT_CASE" FM_STATE_OVERRIDE="$ROOT_CASE/state" FM_ROOT_OVERRIDE="$ROOT" \
+  "$ROOT/bin/fm-crew-state.sh" crew)
+case "$output" in *"state: blocked"*feedback-blocked*) ;; *) fail "expected unreadable readiness to block, got: $output" ;; esac
 pass "feedback readiness lifecycle"
