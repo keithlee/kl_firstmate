@@ -185,6 +185,18 @@ See [`trace-context.md`](trace-context.md) for carrier semantics, supported rout
 The tracked `.no-mistakes.yaml` sets `test.evidence.store_in_repo: true` and pins `commands.lint` to `bin/fm-lint.sh` so local lint matches CI.
 Storing evidence in the repo publishes each run's test artifacts to the orphan `no-mistakes/evidence` branch and links them from the PR body, instead of keeping them on local disk under the no-mistakes home.
 That branch shares no history with code branches, so evidence never enters a pushed feature branch or the default branch; the worktree's `.no-mistakes/` stays local and CI rejects tracked entries under that path.
+
+The operator-only no-mistakes proof policy is configured separately in the
+private global config (`$NM_HOME/config.yaml`) with
+`proof.guidance_files`. Firstmate never accepts a repository-provided proof
+guidance path. no-mistakes snapshots and hashes each configured absolute file
+before Proof; a missing, unreadable, invalid, duplicate, or oversized file
+blocks the run. ProofReview independently validates the resulting evidence.
+
+Firstmate can pin the no-mistakes executable with the private
+`config/no-mistakes` file. Set `path`, `realpath`, and `identity` to the
+operator-approved build; bootstrap and all crewmate invocations resolve and
+verify that same executable, and refuse an upstream or stale binary.
 It does not set `commands.test` to a complete `tests/*.test.sh` walk.
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the firstmate-specific local test policy and entry points.
 Portable shard evidence and coverage rules are in [fm-test-portable-shards.md](fm-test-portable-shards.md); [herdr-backend.md](herdr-backend.md#destructive-lab-safety) owns the real-Herdr lane's isolation boundary, and [runtime-backends.md](verification/runtime-backends.md#herdr) owns active evidence.

@@ -80,6 +80,8 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 # without a branch actor).
 # shellcheck source=bin/fm-lease-lib.sh
 . "$SCRIPT_DIR/fm-lease-lib.sh"
+# shellcheck source=bin/fm-no-mistakes-lib.sh
+. "$SCRIPT_DIR/fm-no-mistakes-lib.sh"
 fm_lease_forbid_branch "PR merge (fm-pr-merge)"
 
 if [ "$#" -lt 2 ]; then
@@ -187,6 +189,34 @@ reject_head_overrides() {
 
 reject_repo_overrides "$@" || exit 1
 [ "$PROVIDER" != gitlab ] || reject_head_overrides "$@" || exit 1
+
+# A locally pinned no-mistakes installation owns the strict GitHub readiness
+# check. The optional local config keeps public Firstmate code free of a
+# personal checkout path; when configured, an unreadable or stale readiness
+# result blocks merge before gh-axi is called.
+github_verify_pr_readiness() {
+  [ "$PROVIDER" = github ] || return 0
+  local pin live_head output
+  pin=$(fm_no_mistakes_config)
+  [ -f "$pin" ] && [ ! -L "$pin" ] || return 0
+  fm_no_mistakes_require || return 1
+  command -v gh >/dev/null 2>&1 || { echo "error: GitHub PR readiness requires gh" >&2; return 1; }
+  live_head=$(gh pr view "$URL" --json headRefOid --jq .headRefOid 2>/dev/null) || {
+    echo "error: could not resolve the live GitHub PR head before merge" >&2
+    return 1
+  }
+  fm_pr_head_valid "$live_head" || {
+    echo "error: GitHub PR returned an invalid head before merge" >&2
+    return 1
+  }
+  output=$("$FM_NO_MISTAKES_BIN" axi pr-readiness --pr "$URL" --head "$live_head" --phase merge 2>&1) || {
+    echo "error: no-mistakes PR readiness blocked GitHub merge" >&2
+    printf '%s\n' "$output" >&2
+    return 1
+  }
+}
+
+github_verify_pr_readiness || exit 1
 
 # Task-derived paths are constructed only after the canonical ID validation.
 META="$STATE/$ID.meta"

@@ -164,6 +164,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 # deferred network stage sets, so an ordinary bootstrap run records nothing.
 # shellcheck source=bin/fm-timing-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-timing-lib.sh"
+# shellcheck source=bin/fm-no-mistakes-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-no-mistakes-lib.sh"
 
 # Network-phase selection (see the header). An unrecognized value resolves to
 # `all` so a malformed override runs every step rather than silently dropping a
@@ -1218,6 +1220,9 @@ detect_local_tools() {
   for t in $COMMON_TOOLS; do
     command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
   done
+  if command -v no-mistakes >/dev/null 2>&1 && ! fm_no_mistakes_require; then
+    echo "NO_MISTAKES_IDENTITY: active binary does not match the configured fork/build pin at $(fm_no_mistakes_config)"
+  fi
   # The treehouse lease-support upgrade check is only relevant when the resolved
   # backend actually requires treehouse (every backend except orca, which owns its
   # own worktrees); an orca home must not be told to upgrade a provider it never uses.
