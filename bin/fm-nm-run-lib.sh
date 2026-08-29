@@ -14,11 +14,18 @@
 # stderr, while fm_nm_run keeps the fail-open query contract for read-only callers.
 # shellcheck source=bin/fm-no-mistakes-lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-no-mistakes-lib.sh"
+FM_NO_MISTAKES_PINNED=0
+if [ -f "$(fm_no_mistakes_config)" ] && [ ! -L "$(fm_no_mistakes_config)" ]; then
+  FM_NO_MISTAKES_PINNED=1
+fi
 FM_NO_MISTAKES_BIN=$(fm_no_mistakes_resolve 2>/dev/null || true)
 
 fm_nm_run_bounded() {  # <dir> <timeout_secs> <args...>
   local dir=$1 timeout_secs=$2 have_timeout=none
   shift 2
+  if [ "$FM_NO_MISTAKES_PINNED" = 1 ] && [ -z "${FM_NO_MISTAKES_BIN:-}" ]; then
+    return 1
+  fi
   if command -v timeout >/dev/null 2>&1; then have_timeout=timeout
   elif command -v gtimeout >/dev/null 2>&1; then have_timeout=gtimeout
   elif command -v perl >/dev/null 2>&1; then have_timeout=perl

@@ -195,10 +195,11 @@ reject_repo_overrides "$@" || exit 1
 # personal checkout path; when configured, an unreadable or stale readiness
 # result blocks merge before gh-axi is called.
 github_verify_pr_readiness() {
-  [ "$PROVIDER" = github ] || return 0
-  local pin live_head output
-  pin=$(fm_no_mistakes_config)
-  [ -f "$pin" ] && [ ! -L "$pin" ] || return 0
+	[ "$PROVIDER" = github ] || return 0
+	local pin live_head output
+	pin=$(fm_no_mistakes_config)
+	[ -f "$pin" ] && [ ! -L "$pin" ] || return 0
+	FM_GITHUB_READINESS_ENFORCED=1
   fm_no_mistakes_require || return 1
   command -v gh >/dev/null 2>&1 || { echo "error: GitHub PR readiness requires gh" >&2; return 1; }
   live_head=$(gh pr view "$URL" --json headRefOid --jq .headRefOid 2>/dev/null) || {
@@ -214,6 +215,24 @@ github_verify_pr_readiness() {
     printf '%s\n' "$output" >&2
     return 1
   }
+  FM_GITHUB_VERIFIED_HEAD=$live_head
+}
+
+# A readiness check and the forge merge are separate processes. Re-read the
+# head immediately before gh-axi so a push/rebase between those calls cannot
+# make an unverified commit mergeable through a TOCTOU gap.
+github_recheck_head_before_merge() {
+	[ "$PROVIDER" = github ] && [ "${FM_GITHUB_READINESS_ENFORCED:-0}" = 1 ] || return 0
+  local live_head
+  live_head=$(gh pr view "$URL" --json headRefOid --jq .headRefOid 2>/dev/null) || {
+    echo "error: could not re-read the live GitHub PR head immediately before merge" >&2
+    return 1
+  }
+  fm_pr_head_valid "$live_head" || { echo "error: GitHub PR returned an invalid head immediately before merge" >&2; return 1; }
+  if [ "$live_head" != "${FM_GITHUB_VERIFIED_HEAD:-}" ]; then
+    echo "error: GitHub PR head changed after readiness verification; refusing merge" >&2
+    return 1
+  fi
 }
 
 github_verify_pr_readiness || exit 1
@@ -657,6 +676,7 @@ gitlab_confirm_merged() {
 # landed outcome, so even a provider read failure after a real merge cannot
 # leave teardown without the PR identity it needs to verify the result.
 record_pr_metadata || exit 1
+github_recheck_head_before_merge || exit 1
 
 case "$PROVIDER" in
   github)
