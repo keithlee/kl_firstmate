@@ -39,6 +39,19 @@ fm_nm_run() {  # <dir> <timeout_secs> <args...>
   fm_nm_run_checked "$@" || true
 }
 
+# Live handback readiness is required only when the operator has installed a
+# private identity pin. This keeps legacy/unconfigured homes readable while
+# ensuring a Keith-configured home never treats an old checks-passed event as
+# permanent truth. The caller supplies the already-attributed axi status TOON.
+fm_nm_handback_readiness() {  # <dir> <timeout_secs> <status-toon>
+  local dir=$1 timeout_secs=$2 status_toon=$3 pr head
+  [ -n "$(fm_no_mistakes_value identity 2>/dev/null || true)" ] || return 0
+  pr=$(fm_nm_strip_quotes "$(fm_nm_field "$status_toon" pr)")
+  head=$(fm_nm_strip_quotes "$(fm_nm_field "$status_toon" head)")
+  [ -n "$pr" ] && [ -n "$head" ] || return 1
+  fm_nm_run_checked "$dir" "$timeout_secs" axi pr-readiness --pr "$pr" --head "$head" --phase handback >/dev/null
+}
+
 fm_nm_trim() {
   local s=${1:-}
   s="${s#"${s%%[![:space:]]*}"}"
