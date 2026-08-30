@@ -39,6 +39,19 @@ issue = {
     "state": {"name": "Todo", "type": "unstarted"},
 }
 
+# A second Todo whose blocking relation only shows up on the second page of
+# inverseRelations (51 total, page size 50). Regression coverage for the
+# unpaginated blocker check that could silently dispatch a blocked Todo.
+blocked_issue = {
+    "id": "issue-blocked-id",
+    "identifier": "HAN-29",
+    "title": "Issue with a blocker beyond the first inverseRelations page",
+    "url": "https://linear.app/hanzireader/issue/HAN-29/issue-with-a-blocker-beyond-the-first-page",
+    "updatedAt": "2026-08-30T12:00:00.000Z",
+    "project": {"id": "project-id", "name": "Messsucher", "slugId": "messsucher-729853ec4ffb"},
+    "state": {"name": "Todo", "type": "unstarted"},
+}
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         return
@@ -53,15 +66,28 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(409)
             self.end_headers()
             return
+        variables = body.get("variables") or {}
         if "FirstmateLinearIssues" in query:
-            data = {"issues": {"nodes": [issue], "pageInfo": {"hasNextPage": False, "endCursor": None}}}
+            data = {"issues": {"nodes": [issue, blocked_issue], "pageInfo": {"hasNextPage": False, "endCursor": None}}}
         elif "FirstmateLinearComments" in query:
             comments = [{"id": "comment-existing", "createdAt": "2026-08-29T10:00:00.000Z", "updatedAt": "2026-08-29T10:00:00.000Z"}]
             if phase_path.exists() and phase_path.read_text(encoding="utf-8").strip() == "new-comment":
                 comments.append({"id": "comment-new", "createdAt": "2026-08-30T13:00:00.000Z", "updatedAt": "2026-08-30T13:00:00.000Z"})
             data = {"issue": {"comments": {"nodes": comments, "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
         elif "FirstmateLinearInverseRelations" in query:
-            data = {"issue": {"inverseRelations": {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+            if variables.get("issueId") == "issue-blocked-id":
+                if variables.get("after"):
+                    nodes = [{"type": "blocks", "issue": {"id": "blocker-2", "identifier": "HAN-30", "state": {"name": "In Progress", "type": "started"}}}]
+                    page_info = {"hasNextPage": False, "endCursor": None}
+                else:
+                    nodes = [
+                        {"type": "blocks", "issue": {"id": f"blocker-page1-{n}", "identifier": f"HAN-{100 + n}", "state": {"name": "Done", "type": "completed"}}}
+                        for n in range(50)
+                    ]
+                    page_info = {"hasNextPage": True, "endCursor": "page2"}
+                data = {"issue": {"inverseRelations": {"nodes": nodes, "pageInfo": page_info}}}
+            else:
+                data = {"issue": {"inverseRelations": {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
         else:
             self.send_response(400)
             self.end_headers()
@@ -88,7 +114,7 @@ cat > "$CONFIG" <<'JSON'
       "firstmateProject": "FilmLeica"
     }
   ],
-  "allowIssues": ["HAN-28"]
+  "allowIssues": ["HAN-28", "HAN-29"]
 }
 JSON
 
@@ -121,6 +147,8 @@ assert_contains "$out" '"issueId":"issue-immutable-id"' "event carries the immut
 assert_contains "$out" '"url":"https://linear.app/hanzireader/issue/HAN-28/make-m14-the-default-and-first-cameraonboarding-profile"' \
   "event preserves the exact API-provided Linear URL"
 assert_not_contains "$out" comment-existing "existing comments are baselined without an event"
+assert_not_contains "$out" '"identifier":"HAN-29"' \
+  "a Todo whose blocker is only on the second inverseRelations page is excluded, not wrongly dispatched"
 pass "eligible Todo detection is exact and existing comments are baselined"
 
 out=$(linear poll-once "$CONFIG")
