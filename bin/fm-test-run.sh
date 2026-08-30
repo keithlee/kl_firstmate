@@ -560,6 +560,7 @@ tests/fm-pi-watch-extension.test.sh 17979
 tests/fm-pr-check-security.test.sh 250417
 tests/fm-procevent-when.test.sh 15249
 tests/fm-procevent.test.sh 53142
+tests/fm-procevent-linear.test.sh 5000
 tests/fm-project-origin.test.sh 105
 tests/fm-public-followup.test.sh 36301
 tests/fm-quota-array-dispatch-live-e2e.test.sh 18
@@ -1154,6 +1155,9 @@ families_for_changed_path() {
       printf '%s\n' __script__:fm-procevent.test.sh
       printf '%s\n' __script__:fm-procevent-when.test.sh
       printf '%s\n' __script__:fm-remote-reply.test.sh
+      ;;
+    bin/fm-procevent-linear.sh)
+      printf '%s\n' __script__:fm-procevent-linear.test.sh
       ;;
     bin/fm-timeout-lib.sh)
       # The shared hard bound: session start's runtime bound, the fleet/bearings
