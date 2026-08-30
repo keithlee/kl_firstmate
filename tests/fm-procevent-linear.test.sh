@@ -37,7 +37,6 @@ issue = {
     "updatedAt": "2026-08-30T12:00:00.000Z",
     "project": {"id": "project-id", "name": "Messsucher", "slugId": "messsucher-729853ec4ffb"},
     "state": {"name": "Todo", "type": "unstarted"},
-    "inverseRelations": {"nodes": []},
 }
 
 class Handler(BaseHTTPRequestHandler):
@@ -61,6 +60,8 @@ class Handler(BaseHTTPRequestHandler):
             if phase_path.exists() and phase_path.read_text(encoding="utf-8").strip() == "new-comment":
                 comments.append({"id": "comment-new", "createdAt": "2026-08-30T13:00:00.000Z", "updatedAt": "2026-08-30T13:00:00.000Z"})
             data = {"issue": {"comments": {"nodes": comments, "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+        elif "FirstmateLinearInverseRelations" in query:
+            data = {"issue": {"inverseRelations": {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
         else:
             self.send_response(400)
             self.end_headers()

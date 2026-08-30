@@ -94,7 +94,6 @@ ISSUES_QUERY='query FirstmateLinearIssues($projectSlug: String!, $stateNames: [S
       id identifier title url updatedAt
       project { id name slugId }
       state { name type }
-      inverseRelations(first: 50) { nodes { type issue { id identifier state { name type } } } }
     }
     pageInfo { hasNextPage endCursor }
   }
@@ -105,6 +104,16 @@ COMMENTS_QUERY='query FirstmateLinearComments($issueId: String!, $first: Int!, $
   issue(id: $issueId) {
     comments(first: $first, after: $after) {
       nodes { id createdAt updatedAt }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}'
+
+# shellcheck disable=SC2016 # GraphQL variables are literal dollar-prefixed names.
+INVERSE_RELATIONS_QUERY='query FirstmateLinearInverseRelations($issueId: String!, $first: Int!, $after: String) {
+  issue(id: $issueId) {
+    inverseRelations(first: $first, after: $after) {
+      nodes { type issue { id identifier state { name type } } }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -140,9 +149,24 @@ fetch_issue_comments() { # <issue-id>
   printf '%s\n' "$all"
 }
 
+fetch_inverse_relations() { # <issue-id>
+  local issue_id=$1 after='' page all='[]' variables
+  while :; do
+    variables=$(jq -cn --arg issue "$issue_id" --arg after "$after" '
+      {issueId:$issue,first:50,after:(if $after == "" then null else $after end)}')
+    page=$(graphql_query "$INVERSE_RELATIONS_QUERY" "$variables") || return 1
+    all=$(jq -cn --argjson accumulated "$all" --argjson page "$page" \
+      '$accumulated + ($page.data.issue.inverseRelations.nodes // [])') || return 1
+    [ "$(printf '%s' "$page" | jq -r '.data.issue.inverseRelations.pageInfo.hasNextPage // false')" = true ] || break
+    after=$(printf '%s' "$page" | jq -r '.data.issue.inverseRelations.pageInfo.endCursor // empty')
+    [ -n "$after" ] || die "Linear inverse-relation pagination omitted endCursor"
+  done
+  printf '%s\n' "$all"
+}
+
 poll_cycle() { # <config> <source-id>: prints one envelope only on change
   local config=$1 id=$2 snapshot previous='{"issues":{},"comments":{}}' first_observation=true
-  local states allow project slug project_name fm_project issues issue issue_id comments
+  local states allow project slug project_name fm_project issues issue issue_id comments inverse_relations
   local current='{"issues":{},"comments":{}}' events='[]' staged
   snapshot=$(snapshot_path "$id")
   if [ -f "$snapshot" ]; then
@@ -170,8 +194,9 @@ poll_cycle() { # <config> <source-id>: prints one envelope only on change
           .comments[$comment.id] = {createdAt:$comment.createdAt,updatedAt:$comment.updatedAt})')
 
       if [ "$(printf '%s' "$issue" | jq -r '.state.name')" = Todo ] \
-        && printf '%s' "$issue" | jq -e '
-          [(.inverseRelations.nodes // [])[]
+        && inverse_relations=$(fetch_inverse_relations "$issue_id") \
+        && printf '%s' "$inverse_relations" | jq -e '
+          [.[]
             | select((.type | ascii_downcase) == "blocks")
             | select((.issue.state.type | ascii_downcase) != "completed")
             | select((.issue.state.type | ascii_downcase) != "canceled")]
