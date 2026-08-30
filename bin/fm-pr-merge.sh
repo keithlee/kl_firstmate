@@ -224,8 +224,9 @@ github_verify_pr_readiness() {
 }
 
 # A readiness check and the forge merge are separate processes. Re-read the
-# head immediately before gh-axi so a push/rebase between those calls cannot
-# make an unverified commit mergeable through a TOCTOU gap.
+# head immediately before the merge so a push/rebase between those calls cannot
+# make an unverified commit mergeable through a TOCTOU gap. The readiness path
+# also passes GitHub's server-enforced match-head-commit precondition below.
 github_recheck_head_before_merge() {
 	[ "$PROVIDER" = github ] && [ "${FM_GITHUB_READINESS_ENFORCED:-0}" = 1 ] || return 0
   local live_head
@@ -687,10 +688,6 @@ case "$PROVIDER" in
   github)
     merge_output=
     merge_args=()
-    merge_head_args=()
-    if [ "${FM_GITHUB_READINESS_ENFORCED:-0}" = 1 ]; then
-      merge_head_args=(--sha "${FM_GITHUB_VERIFIED_HEAD:-}")
-    fi
     if ! caller_has_merge_method "$@"; then
       merge_args=(--squash)
     fi
@@ -698,8 +695,21 @@ case "$PROVIDER" in
       FM_PR_GITHUB_AUTO_REQUESTED=true
     fi
     FM_PR_GITHUB_CALLER_METHOD=$(caller_merge_method "$@")
-    if merge_output=$(gh-axi pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
-      "${merge_head_args[@]+"${merge_head_args[@]}"}" \
+    if [ "${FM_GITHUB_READINESS_ENFORCED:-0}" = 1 ]; then
+      # gh-axi intentionally exposes a smaller merge surface and rejects
+      # provider-specific head flags. Use the supported GitHub CLI command
+      # here: --match-head-commit is enforced by GitHub atomically at merge,
+      # closing the final check/merge race.
+      if merge_output=$(gh pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
+        --match-head-commit "${FM_GITHUB_VERIFIED_HEAD:-}" \
+        "${merge_args[@]+"${merge_args[@]}"}" "$@" 2>&1); then
+        FM_PR_GITHUB_MERGE_ACCEPTED=true
+      else
+        merge_status=$?
+        [ -z "$merge_output" ] || printf '%s\n' "$merge_output" >&2
+        exit "$merge_status"
+      fi
+    elif merge_output=$(gh-axi pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
       "${merge_args[@]+"${merge_args[@]}"}" "$@" 2>&1); then
       FM_PR_GITHUB_MERGE_ACCEPTED=true
     else

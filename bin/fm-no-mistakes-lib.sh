@@ -15,6 +15,29 @@ fm_no_mistakes_value() {
   sed -n "s/^$key=//p" "$file" | tail -1
 }
 
+# macOS and minimal worker environments do not necessarily provide the
+# external realpath utility. Perl is part of the Firstmate runtime contract;
+# the final cd/pwd fallback covers ordinary non-symlink executables.
+fm_no_mistakes_realpath() {
+  local candidate=$1 dir base
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$candidate"
+    return
+  fi
+  if command -v perl >/dev/null 2>&1; then
+    perl -MCwd=abs_path -e 'my $p = abs_path($ARGV[0]); print $p if defined $p' "$candidate"
+    return
+  fi
+  case "$candidate" in
+    */*)
+      dir=${candidate%/*}; base=${candidate##*/}
+      [ -n "$dir" ] || dir=.
+      (cd -P -- "$dir" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$base")
+      ;;
+    *) return 1 ;;
+  esac
+}
+
 fm_no_mistakes_resolve() {
   local configured expected_path expected_identity candidate real version config
   config=$(fm_no_mistakes_config)
@@ -34,7 +57,7 @@ fm_no_mistakes_resolve() {
   fi
   candidate=${configured:-$(command -v no-mistakes 2>/dev/null || true)}
   [ -n "$candidate" ] || { echo "no-mistakes is not installed" >&2; return 1; }
-  real=$(realpath "$candidate" 2>/dev/null || true)
+  real=$(fm_no_mistakes_realpath "$candidate" 2>/dev/null || true)
   [ -n "$real" ] && [ -x "$real" ] || { echo "no-mistakes executable cannot be resolved: $candidate" >&2; return 1; }
   expected_path=$(fm_no_mistakes_value realpath || true)
   if [ -n "$expected_path" ] && [ "$real" != "$expected_path" ]; then
