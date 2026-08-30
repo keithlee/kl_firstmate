@@ -1509,7 +1509,11 @@ conclude_task_no_mistakes_run() {  # <worktree>
   local wt=$1 out run_id
   [ "$KIND" = ship ] || return 0
   [ -d "$wt" ] || return 0
-  command -v no-mistakes >/dev/null 2>&1 || return 0
+  if [ "${FM_NO_MISTAKES_PINNED:-0}" = 1 ]; then
+    fm_no_mistakes_require || return 1
+  elif [ -z "${FM_NO_MISTAKES_BIN:-}" ]; then
+    return 0
+  fi
   task_run_is_own_parked_run "$wt" || return 0
   run_id=$TASK_RUN_ID
   echo "teardown: no-mistakes run for $ID is parked at a gate; aborting before the worker is removed" >&2

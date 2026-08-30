@@ -51,12 +51,40 @@ fm_nm_run() {  # <dir> <timeout_secs> <args...>
 # ensuring a Keith-configured home never treats an old checks-passed event as
 # permanent truth. The caller supplies the already-attributed axi status TOON.
 fm_nm_handback_readiness() {  # <dir> <timeout_secs> <status-toon>
-  local dir=$1 timeout_secs=$2 status_toon=$3 pr head
+  local dir=$1 timeout_secs=$2 status_toon=$3 pr head output
   [ -n "$(fm_no_mistakes_value identity 2>/dev/null || true)" ] || return 0
   pr=$(fm_nm_strip_quotes "$(fm_nm_field "$status_toon" pr)")
   head=$(fm_nm_strip_quotes "$(fm_nm_field "$status_toon" head)")
   [ -n "$pr" ] && [ -n "$head" ] || return 1
-  fm_nm_run_checked "$dir" "$timeout_secs" axi pr-readiness --pr "$pr" --head "$head" --phase handback >/dev/null
+  output=$(fm_nm_run_checked "$dir" "$timeout_secs" axi pr-readiness --pr "$pr" --head "$head" --phase handback) || return 1
+  fm_nm_validate_readiness "$output" "$head" handback
+}
+
+# Validate the stable TOON contract emitted by `axi pr-readiness`. Exit status
+# alone is insufficient: a buggy or malicious provider wrapper can return 0
+# with an incomplete/unknown record. Empty arrays are represented by TOON as
+# `key: []`; any unresolved item therefore fails closed.
+fm_nm_validate_readiness() {  # <output> <expected-head> <phase>
+  local output=$1 expected_head=$2 phase=$3 value decision
+  [ -n "$output" ] || return 1
+  for key in pr phase ready head proof_review ci review_decision unresolved_item_ids unresolved_item_urls unknown reason; do
+    [ "$(printf '%s\n' "$output" | grep -c "^[[:space:]]*$key:")" -eq 1 ] || return 1
+  done
+  [ "$(fm_nm_strip_quotes "$(fm_nm_field "$output" phase)")" = "$phase" ] || return 1
+  [ "$(fm_nm_strip_quotes "$(fm_nm_field "$output" ready)")" = true ] || return 1
+  [ "$(fm_nm_strip_quotes "$(fm_nm_field "$output" head)")" = "$expected_head" ] || return 1
+  [ "$(fm_nm_strip_quotes "$(fm_nm_field "$output" proof_review)")" = true ] || return 1
+  [ "$(fm_nm_strip_quotes "$(fm_nm_field "$output" ci)")" = true ] || return 1
+  [ "$(fm_nm_strip_quotes "$(fm_nm_field "$output" unknown)")" = false ] || return 1
+  decision=$(fm_nm_strip_quotes "$(fm_nm_field "$output" review_decision)")
+  case "$phase:$decision" in
+    handback:APPROVED|handback:CHANGES_REQUESTED|merge:APPROVED) ;;
+    *) return 1 ;;
+  esac
+  value=$(fm_nm_strip_quotes "$(fm_nm_field "$output" unresolved_item_ids)")
+  [ "$value" = '[]' ] || return 1
+  value=$(fm_nm_strip_quotes "$(fm_nm_field "$output" unresolved_item_urls)")
+  [ "$value" = '[]' ] || return 1
 }
 
 fm_nm_trim() {

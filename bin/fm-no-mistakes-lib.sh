@@ -16,8 +16,22 @@ fm_no_mistakes_value() {
 }
 
 fm_no_mistakes_resolve() {
-  local configured expected_path expected_identity candidate real version
+  local configured expected_path expected_identity candidate real version config
+  config=$(fm_no_mistakes_config)
   configured=$(fm_no_mistakes_value path || true)
+  # Presence of the private pin makes all three identity fields mandatory.
+  # A path-only record is not a pin: accepting it would silently trust any
+  # replaced executable at that path.
+  if [ -f "$config" ] && [ ! -L "$config" ]; then
+    expected_path=$(fm_no_mistakes_value realpath || true)
+    expected_path="${expected_path#"${expected_path%%[![:space:]]*}"}"
+    expected_path="${expected_path%"${expected_path##*[![:space:]]}"}"
+    expected_identity=$(fm_no_mistakes_value identity || true)
+    if [ -z "$configured" ] || [ -z "$expected_path" ] || [ -z "$expected_identity" ]; then
+      echo "no-mistakes pin is incomplete at $config; path, realpath, and identity are all required" >&2
+      return 1
+    fi
+  fi
   candidate=${configured:-$(command -v no-mistakes 2>/dev/null || true)}
   [ -n "$candidate" ] || { echo "no-mistakes is not installed" >&2; return 1; }
   real=$(realpath "$candidate" 2>/dev/null || true)

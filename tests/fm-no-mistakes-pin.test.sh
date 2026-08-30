@@ -27,4 +27,20 @@ printf 'path=%s\nrealpath=%s\nidentity=wrong-build\n' "$case_dir/bin/pinned" "$(
 if env FM_HOME="$case_dir" FM_NO_MISTAKES_CONFIG="$case_dir/config/no-mistakes" PATH=/usr/bin:/bin bash -c '. "$1/bin/fm-no-mistakes-lib.sh"; fm_no_mistakes_resolve' _ "$ROOT" >/dev/null 2>&1; then
   fail "mismatched configured identity was accepted"
 fi
+printf 'path=%s\nrealpath=%s\n' "$case_dir/bin/pinned" "$(realpath "$case_dir/bin/pinned")" > "$case_dir/config/no-mistakes"
+# shellcheck disable=SC2016
+if env FM_HOME="$case_dir" FM_NO_MISTAKES_CONFIG="$case_dir/config/no-mistakes" PATH=/usr/bin:/bin bash -c '. "$1/bin/fm-no-mistakes-lib.sh"; fm_no_mistakes_resolve' _ "$ROOT" >/dev/null 2>&1; then
+  fail "path-only configured pin was accepted"
+fi
 pass "no-mistakes pin authority"
+
+# Readiness is a structured contract, not an exit code. Malformed or unknown
+# output must remain blocked even when the wrapped command exits successfully.
+valid_readiness=$'pr: https://github.com/example/repo/pull/1\nphase: handback\nready: true\nhead: expected-head\nproof_review: true\nci: true\nreview_decision: APPROVED\nunresolved_item_ids: []\nunresolved_item_urls: []\nunknown: false\nreason: validated'
+if ! bash -c '. "$1/bin/fm-nm-run-lib.sh"; fm_nm_validate_readiness "$2" expected-head handback' _ "$ROOT" "$valid_readiness"; then
+  fail "valid readiness contract was rejected"
+fi
+if bash -c '. "$1/bin/fm-nm-run-lib.sh"; fm_nm_validate_readiness "ready: true" expected-head handback' _ "$ROOT"; then
+  fail "malformed readiness contract was accepted"
+fi
+pass "readiness output contract fails closed"

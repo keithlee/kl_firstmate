@@ -20,6 +20,10 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the same locally pinned executable used by the primary so remote
+# workers never initialize a project with an arbitrary PATH binary.
+# shellcheck source=bin/fm-no-mistakes-lib.sh
+. "$SCRIPT_DIR/fm-no-mistakes-lib.sh"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME=${FM_HOME:?FM_HOME is required}
 MAX_MANIFEST_BYTES=1048576
@@ -231,8 +235,8 @@ EOF
     printf '%s\n' "$NAME" >> "$CREATED_PROJECTS"
     git clone --quiet -- "$ORIGIN" "$DEST" || die "could not clone project $NAME on the remote host"
     if [ "$MODE" = no-mistakes ]; then
-      command -v no-mistakes >/dev/null 2>&1 || die "no-mistakes is unavailable for project $NAME"
-      (cd "$DEST" && no-mistakes init >/dev/null && no-mistakes doctor >/dev/null) \
+      fm_no_mistakes_require || die "pinned no-mistakes executable is unavailable for project $NAME"
+      (cd "$DEST" && "$FM_NO_MISTAKES_BIN" init >/dev/null && "$FM_NO_MISTAKES_BIN" doctor >/dev/null) \
         || die "no-mistakes initialization failed for project $NAME"
     fi
   fi

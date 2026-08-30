@@ -49,6 +49,10 @@ SUB_HOME_PARENT_MARKER=".fm-secondmate-parent"
 . "$SCRIPT_DIR/fm-secondmate-charter-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# The operator pin is authoritative for every project initialization, including
+# homes seeded for crewmates; never resolve a second binary from PATH.
+# shellcheck source=bin/fm-no-mistakes-lib.sh
+. "$SCRIPT_DIR/fm-no-mistakes-lib.sh"
 
 usage() {
   echo "usage: fm-home-seed.sh <id> <home|-> {<project>...|--no-projects}" >&2
@@ -718,11 +722,11 @@ initialize_no_mistakes_project() {
     echo "error: seeded project $project at $dst is not initialized for no-mistakes; refusing to mutate preexisting clone" >&2
     return 1
   fi
-  command -v no-mistakes >/dev/null 2>&1 || {
-    echo "error: no-mistakes command not found; cannot initialize $project in $home" >&2
+  fm_no_mistakes_require || {
+    echo "error: pinned no-mistakes executable is unavailable; cannot initialize $project in $home" >&2
     return 1
   }
-  ( cd "$dst" && no-mistakes init && no-mistakes doctor ) || {
+  ( cd "$dst" && "$FM_NO_MISTAKES_BIN" init && "$FM_NO_MISTAKES_BIN" doctor ) || {
     echo "error: failed to initialize no-mistakes for $project at $dst" >&2
     return 1
   }

@@ -215,6 +215,11 @@ github_verify_pr_readiness() {
     printf '%s\n' "$output" >&2
     return 1
   }
+  if ! fm_nm_validate_readiness "$output" "$live_head" merge; then
+    echo "error: no-mistakes PR readiness returned an incomplete or unknown contract; refusing GitHub merge" >&2
+    printf '%s\n' "$output" >&2
+    return 1
+  fi
   FM_GITHUB_VERIFIED_HEAD=$live_head
 }
 
@@ -682,6 +687,10 @@ case "$PROVIDER" in
   github)
     merge_output=
     merge_args=()
+    merge_head_args=()
+    if [ "${FM_GITHUB_READINESS_ENFORCED:-0}" = 1 ]; then
+      merge_head_args=(--sha "${FM_GITHUB_VERIFIED_HEAD:-}")
+    fi
     if ! caller_has_merge_method "$@"; then
       merge_args=(--squash)
     fi
@@ -690,6 +699,7 @@ case "$PROVIDER" in
     fi
     FM_PR_GITHUB_CALLER_METHOD=$(caller_merge_method "$@")
     if merge_output=$(gh-axi pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
+      "${merge_head_args[@]+"${merge_head_args[@]}"}" \
       "${merge_args[@]+"${merge_args[@]}"}" "$@" 2>&1); then
       FM_PR_GITHUB_MERGE_ACCEPTED=true
     else

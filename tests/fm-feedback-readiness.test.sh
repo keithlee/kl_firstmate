@@ -24,7 +24,10 @@ if [ "${1:-}" = axi ] && [ "${2:-}" = status ]; then
 fi
 if [ "${1:-}" = axi ] && [ "${2:-}" = logs ]; then echo 'all CI checks passed - still monitoring until merged or closed'; exit 0; fi
 if [ "${1:-}" = axi ] && [ "${2:-}" = pr-readiness ]; then
-  [ "${FM_READINESS:-fail}" = pass ] && exit 0
+  if [ "${FM_READINESS:-fail}" = pass ]; then
+    printf 'pr: https://github.com/example/repo/pull/1\nphase: handback\nready: true\nhead: %s\nproof_review: true\nci: true\nreview_decision: APPROVED\nunresolved_item_ids: []\nunresolved_item_urls: []\nunknown: false\nreason: validated\n' "$HEAD"
+    exit 0
+  fi
   # fail/unreadable/stale are all fail-closed at the lifecycle surface.
   exit 1
 fi

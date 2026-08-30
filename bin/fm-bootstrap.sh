@@ -912,6 +912,23 @@ tool_version_at_least() {  # <tool> <min-version>
   [ "$patch" -ge "$min_patch" ]
 }
 
+tool_version_at_least_path() {  # <resolved-path> <min-version>
+  local tool=$1 min=$2 output parts major minor patch extra
+  local min_major min_minor min_patch min_extra
+  [ -x "$tool" ] || return 1
+  output=$("$tool" --version 2>/dev/null) || return 1
+  parts=$(printf '%s\n' "$output" | sed -nE 's/.*[vV]?([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/p' | head -n 1)
+  IFS=' ' read -r major minor patch extra <<< "$parts"
+  [ -n "$major" ] && [ -n "$minor" ] && [ -n "$patch" ] && [ -z "$extra" ] || return 1
+  IFS='.' read -r min_major min_minor min_patch min_extra <<< "$min"
+  [ -n "$min_major" ] && [ -n "$min_minor" ] && [ -n "$min_patch" ] && [ -z "$min_extra" ] || return 1
+  [ "$major" -gt "$min_major" ] && return 0
+  [ "$major" -eq "$min_major" ] || return 1
+  [ "$minor" -gt "$min_minor" ] && return 0
+  [ "$minor" -eq "$min_minor" ] || return 1
+  [ "$patch" -ge "$min_patch" ]
+}
+
 x_mode_write_if_changed() {
   local dest=$1 content=$2 mode=$3 parent tmp parent_device current_mode
   parent=${dest%/*}
@@ -1218,7 +1235,13 @@ detect_local_tools() {
       || missing_tool_diagnostic "$t"
   done
   for t in $COMMON_TOOLS; do
-    command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
+    if [ "$t" = no-mistakes ] && [ -f "$(fm_no_mistakes_config)" ] && [ ! -L "$(fm_no_mistakes_config)" ]; then
+      nm_bin=$(fm_no_mistakes_resolve 2>/dev/null || true)
+      [ -n "$nm_bin" ] || { echo "MISSING: no-mistakes (configured pin is unreadable at $(fm_no_mistakes_config))"; continue; }
+      tool_version_at_least_path "$nm_bin" "$NO_MISTAKES_MIN" || echo "MISSING: no-mistakes (configured executable failed version floor: $nm_bin)"
+    else
+      command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
+    fi
   done
   if command -v no-mistakes >/dev/null 2>&1 && ! fm_no_mistakes_require; then
     echo "NO_MISTAKES_IDENTITY: active binary does not match the configured fork/build pin at $(fm_no_mistakes_config)"
@@ -1230,7 +1253,12 @@ detect_local_tools() {
     && command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
     echo "MISSING: treehouse (install: $(install_cmd treehouse))"
   fi
-  if command -v no-mistakes >/dev/null 2>&1 && ! tool_version_at_least no-mistakes "$NO_MISTAKES_MIN"; then
+  if [ -f "$(fm_no_mistakes_config)" ] && [ ! -L "$(fm_no_mistakes_config)" ]; then
+    nm_bin=$(fm_no_mistakes_resolve 2>/dev/null || true)
+    if [ -z "$nm_bin" ] || ! tool_version_at_least_path "$nm_bin" "$NO_MISTAKES_MIN"; then
+      echo "MISSING: no-mistakes (configured executable failed identity or version checks at $(fm_no_mistakes_config))"
+    fi
+  elif command -v no-mistakes >/dev/null 2>&1 && ! tool_version_at_least no-mistakes "$NO_MISTAKES_MIN"; then
     echo "MISSING: no-mistakes (install: $(install_cmd no-mistakes))"
   fi
   if command -v gh-axi >/dev/null 2>&1 && ! tool_version_at_least gh-axi "$GH_AXI_MIN"; then
