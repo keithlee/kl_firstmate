@@ -1,0 +1,40 @@
+{
+  "rules": [
+    {
+      "when": "planning, investigation, or review tasks when Firstmate is running from Claude",
+      "use": {
+        "harness": "claude",
+        "model": "claude-opus-5",
+        "effort": "high"
+      },
+      "why": "Use Opus for planning and review with high reasoning."
+    },
+    {
+      "when": "implementation or execution tasks when Firstmate is running from Claude",
+      "use": {
+        "harness": "claude",
+        "model": "claude-sonnet-5",
+        "effort": "low"
+      },
+      "why": "Use Sonnet for implementation with low reasoning effort."
+    },
+    {
+      "when": "planning, investigation, or review tasks when Firstmate is running from Codex",
+      "use": {
+        "harness": "codex",
+        "model": "gpt-5.6-sol",
+        "effort": "high"
+      },
+      "why": "Use Sol for planning and review with high reasoning."
+    },
+    {
+      "when": "implementation or execution tasks when Firstmate is running from Codex",
+      "use": {
+        "harness": "codex",
+        "model": "gpt-5.6-luna",
+        "effort": "high"
+      },
+      "why": "Use Luna for implementation with high reasoning."
+    }
+  ]
+}
