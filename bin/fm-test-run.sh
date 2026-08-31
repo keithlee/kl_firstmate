@@ -246,6 +246,7 @@ family_for_basename() {
     fm-send-secondmate-marker.test.sh|fm-shared-captain-inheritance.test.sh)
       printf '%s\n' secondmate
       ;;
+    fm-backlog-atomicity.test.sh|\
     fm-bootstrap.test.sh|fm-bootstrap-network-parallel.test.sh|fm-fleet-sync.test.sh|fm-gate-refuse.test.sh|fm-gotmp.test.sh|\
     fm-session-start.test.sh|fm-sessionstart-nudge.test.sh|fm-startup-network.test.sh|\
     fm-tangle-guard.test.sh|fm-update.test.sh)
@@ -531,6 +532,7 @@ tests/fm-daemon.test.sh 25834
 tests/fm-documentation-audiences.test.sh 642
 tests/fm-fleet-snapshot-view.test.sh 6995
 tests/fm-fleet-sync.test.sh 20194
+tests/fm-extension-binding.test.sh 35000
 tests/fm-gate-refuse.test.sh 4071
 tests/fm-gitignore-config.test.sh 63
 tests/fm-gotmp.test.sh 762
@@ -546,6 +548,7 @@ tests/fm-herdr-version-floor-live-e2e.test.sh 20
 tests/fm-inactive-reconcile.test.sh 41671
 tests/fm-kimi-harness.test.sh 15092
 tests/fm-lint-workflows.test.sh 744
+tests/fm-linear-ticket-writer.test.sh 1500
 tests/fm-muse-harness.test.sh 27414
 tests/fm-muse-signals-live-e2e.test.sh 21
 tests/fm-on.test.sh 8602
@@ -558,6 +561,7 @@ tests/fm-pi-watch-extension.test.sh 17979
 tests/fm-pr-check-security.test.sh 250417
 tests/fm-procevent-when.test.sh 15249
 tests/fm-procevent.test.sh 53142
+tests/fm-procevent-linear.test.sh 5000
 tests/fm-project-origin.test.sh 105
 tests/fm-public-followup.test.sh 36301
 tests/fm-quota-array-dispatch-live-e2e.test.sh 18
@@ -598,6 +602,7 @@ tests/fm-task-delivery.test.sh 2414
 tests/fm-teardown-endpoint-safety.test.sh 7295
 tests/fm-teardown.test.sh 87400
 tests/fm-test-fixture-cleanup.test.sh 532
+tests/fm-test-fixtures.test.sh 1045
 tests/fm-test-isolation-proof.test.sh 451
 tests/fm-tmux-agent-liveness.test.sh 4065
 tests/fm-tool-update-check.test.sh 12846
@@ -1143,6 +1148,21 @@ families_for_changed_path() {
       printf '%s\n' session-bootstrap
       printf '%s\n' live-harness-optin
       ;;
+    bin/fm-extension.mjs|bin/fm-extension.sh|docs/examples/process-event-extension/*)
+      printf '%s\n' __script__:fm-extension-binding.test.sh
+      ;;
+    bin/fm-procevent.sh|bin/fm-procevent-lib.sh|bin/fm-procevent-extension-capture.pl)
+      printf '%s\n' __script__:fm-extension-binding.test.sh
+      printf '%s\n' __script__:fm-procevent.test.sh
+      printf '%s\n' __script__:fm-procevent-when.test.sh
+      printf '%s\n' __script__:fm-remote-reply.test.sh
+      ;;
+    bin/fm-procevent-linear.sh)
+      printf '%s\n' __script__:fm-procevent-linear.test.sh
+      ;;
+    bin/fm-linear-ticket-writer.sh)
+      printf '%s\n' __script__:fm-linear-ticket-writer.test.sh
+      ;;
     bin/fm-timeout-lib.sh)
       # The shared hard bound: session start's runtime bound, the fleet/bearings
       # snapshots, the vendor auth probe, the stow cascade's per-home step, and
@@ -1228,7 +1248,7 @@ families_for_changed_path() {
     docs/configuration.md|docs/supervision-protocols/*)
       printf '%s\n' pure-contract-unit
       ;;
-    tests/lib.sh|tests/*-helpers.sh)
+    tests/lib.sh|tests/*-helpers.sh|tests/fixtures.sh)
       families_for_test_reference "$(basename "$path")" \
         || printf '%s\n' "__unmapped__:$path"
       ;;
