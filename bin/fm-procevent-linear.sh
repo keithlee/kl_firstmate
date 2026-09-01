@@ -143,7 +143,7 @@ fetch_issue_comments() { # <issue-id>
 poll_cycle() { # <config> <source-id>: prints one envelope only on change
   local config=$1 id=$2 snapshot previous='{"issues":{},"comments":{}}' first_observation=true
   local states allow project slug project_name fm_project issues issue issue_id comments
-  local current='{"issues":{},"comments":{}}' events='[]' staged
+  local current events='[]' staged
   snapshot=$(snapshot_path "$id")
   if [ -f "$snapshot" ]; then
     jq -e '.issues | type == "object"' "$snapshot" >/dev/null 2>&1 \
@@ -151,6 +151,11 @@ poll_cycle() { # <config> <source-id>: prints one envelope only on change
     previous=$(jq -c . "$snapshot") || exit 1
     first_observation=false
   fi
+  # Carry forward every previously observed issue/comment identity rather than
+  # rebuilding from only this cycle's active-state issues: an issue that
+  # leaves the active states and later returns must not look brand-new, or
+  # its already-seen comments replay as fresh comment.detected events.
+  current=$previous
   states=$(jq -c '.activeStates // ["Todo", "In Progress", "Blocked", "Human Review"]' "$config")
   allow=$(jq -c '.allowIssues // []' "$config")
 
