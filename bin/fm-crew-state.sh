@@ -426,7 +426,7 @@ nm_run_head_matches_worktree() {
 # completion, while non-GitHub PRs and unavailable GitHub reads stay explicit
 # without making a forge claim this helper cannot prove.
 nm_passed_run_detail() {
-  local pr_url identity number pr_out state merged
+  local pr_url identity number pr_out state
   pr_url=$(strip_quotes "$(nm_field pr)")
   if [ -z "$pr_url" ]; then
     printf 'run passed: local work complete'
@@ -458,11 +458,10 @@ nm_passed_run_detail() {
     return
   }
   state=$(fm_nm_strip_quotes "$(fm_nm_field "$pr_out" state)")
-  merged=$(fm_nm_strip_quotes "$(fm_nm_field "$pr_out" merged)")
-  case "$merged:$state" in
-    yes:*|true:*) printf 'run passed: PR merged/closed' ;;
-    no:closed|false:closed) printf 'run passed: PR closed (not merged)' ;;
-    no:open|false:open) printf 'run passed: PR open (not merged/closed)' ;;
+  case "$state" in
+    merged) printf 'run passed: PR merged/closed' ;;
+    closed) printf 'run passed: PR closed (not merged)' ;;
+    open) printf 'run passed: PR open (not merged/closed)' ;;
     *) printf 'run passed: PR state unverified' ;;
   esac
 }

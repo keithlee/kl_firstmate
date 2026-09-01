@@ -90,8 +90,8 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = view ]; then
     printf 'error: pull request state unavailable\n'
     exit 0
   fi
-  printf 'pull_request:\n  number: %s\n  state: %s\n  merged: %s\n' \
-    "${3:-1}" "${FM_FAKE_GH_PR_STATE:-open}" "${FM_FAKE_GH_PR_MERGED:-no}"
+  printf 'pull_request:\n  number: %s\n  state: %s\n' \
+    "${3:-1}" "${FM_FAKE_GH_PR_STATE:-open}"
   exit 0
 fi
 exit 1
@@ -189,11 +189,10 @@ reset_fakes() {
   FM_FAKE_CI_LOGS=""
   FM_FAKE_GH_PR_VIEW=ok
   FM_FAKE_GH_PR_STATE=open
-  FM_FAKE_GH_PR_MERGED=no
   FM_FAKE_GH_CALLS=
   export FM_FAKE_AXI_STATUS FM_FAKE_AXI_STATUS_RUN FM_FAKE_RUNS_LIST FM_FAKE_BUSY FM_FAKE_BUSY_TEXT FM_FAKE_TMUX_MISSING
   export FM_FAKE_HERDR_BUSY FM_FAKE_HERDR_MISSING FM_FAKE_HERDR_AGENT_STATUS FM_FAKE_CI_LOGS
-  export FM_FAKE_GH_PR_VIEW FM_FAKE_GH_PR_STATE FM_FAKE_GH_PR_MERGED FM_FAKE_GH_CALLS
+  export FM_FAKE_GH_PR_VIEW FM_FAKE_GH_PR_STATE FM_FAKE_GH_CALLS
 }
 
 # --- run-object fixtures (TOON, as `no-mistakes axi status` emits) -----------
@@ -714,7 +713,6 @@ test_terminal_passed_open_pr_not_reported_merged() {
   fm_write_meta "$d/state/feat-open-pr.meta" "window=fm:fm-feat-open-pr" "worktree=$d/wt" "kind=ship"
   FM_FAKE_AXI_STATUS="$(run_passed fm/feat-open-pr)"
   FM_FAKE_GH_PR_STATE=open
-  FM_FAKE_GH_PR_MERGED=no
   local out; out=$(FM_FAKE_GH_CALLS="$d/gh.calls" run_crew_state "$d" feat-open-pr)
   assert_contains "$out" "state: done" "passed run with open PR remains locally done"
   assert_contains "$out" "run passed: PR open (not merged/closed)" "live open PR state is reported"
@@ -744,8 +742,7 @@ test_terminal_passed_merged_pr_reports_merged() {
   make_fakebin "$d" >/dev/null
   fm_write_meta "$d/state/feat-merged-pr.meta" "window=fm:fm-feat-merged-pr" "worktree=$d/wt" "kind=ship"
   FM_FAKE_AXI_STATUS="$(run_passed fm/feat-merged-pr)"
-  FM_FAKE_GH_PR_STATE=closed
-  FM_FAKE_GH_PR_MERGED=yes
+  FM_FAKE_GH_PR_STATE=merged
   local out; out=$(run_crew_state "$d" feat-merged-pr)
   assert_contains "$out" "run passed: PR merged/closed" "live merged PR state permits the merge claim"
   pass "verified merged PR retains the merged/closed claim"
