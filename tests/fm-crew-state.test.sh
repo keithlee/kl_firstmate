@@ -39,11 +39,10 @@ fm_git_identity fmtest fmtest@example.invalid
 
 # A real git repo checked out on <branch>, so the helper's branch attribution
 # (git symbolic-ref) resolves like it would for a live crew worktree.
-make_repo_on_branch() {  # <dir> <branch> [origin-owner/repo]
-  local dir=$1 branch=$2 origin=${3:-o/r}
+make_repo_on_branch() {  # <dir> <branch>
+  local dir=$1 branch=$2
   mkdir -p "$dir"
   git -C "$dir" init -q
-  git -C "$dir" remote add origin "https://github.com/$origin" 2>/dev/null || true
   git -C "$dir" commit -q --allow-empty -m init
   git -C "$dir" checkout -q -b "$branch"
   # Real worktree HEAD for run head-binding (fixtures read FM_FAKE_RUN_HEAD).
@@ -91,8 +90,22 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = view ]; then
     printf 'error: pull request state unavailable\n'
     exit 0
   fi
+  number=${3:-1}
+  repo_arg=""
+  shift 3
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) repo_arg=${2:-}; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  # Real gh-axi resolves --repo authoritatively: an unexpected repo/PR pair
+  # (a stale or foreign-fork link) is not found, exactly as GitHub would 404 it.
+  if [ -n "${FM_FAKE_GH_REPO_EXPECTED:-}" ] && [ "$repo_arg" != "$FM_FAKE_GH_REPO_EXPECTED" ]; then
+    exit 1
+  fi
   printf 'pull_request:\n  number: %s\n  state: %s\n' \
-    "${3:-1}" "${FM_FAKE_GH_PR_STATE:-open}"
+    "$number" "${FM_FAKE_GH_PR_STATE:-open}"
   exit 0
 fi
 exit 1
@@ -190,10 +203,11 @@ reset_fakes() {
   FM_FAKE_CI_LOGS=""
   FM_FAKE_GH_PR_VIEW=ok
   FM_FAKE_GH_PR_STATE=open
+  FM_FAKE_GH_REPO_EXPECTED=
   FM_FAKE_GH_CALLS=
   export FM_FAKE_AXI_STATUS FM_FAKE_AXI_STATUS_RUN FM_FAKE_RUNS_LIST FM_FAKE_BUSY FM_FAKE_BUSY_TEXT FM_FAKE_TMUX_MISSING
   export FM_FAKE_HERDR_BUSY FM_FAKE_HERDR_MISSING FM_FAKE_HERDR_AGENT_STATUS FM_FAKE_CI_LOGS
-  export FM_FAKE_GH_PR_VIEW FM_FAKE_GH_PR_STATE FM_FAKE_GH_CALLS
+  export FM_FAKE_GH_PR_VIEW FM_FAKE_GH_PR_STATE FM_FAKE_GH_REPO_EXPECTED FM_FAKE_GH_CALLS
 }
 
 # --- run-object fixtures (TOON, as `no-mistakes axi status` emits) -----------
@@ -714,11 +728,12 @@ test_terminal_passed_open_pr_not_reported_merged() {
   fm_write_meta "$d/state/feat-open-pr.meta" "window=fm:fm-feat-open-pr" "worktree=$d/wt" "kind=ship"
   FM_FAKE_AXI_STATUS="$(run_passed fm/feat-open-pr)"
   FM_FAKE_GH_PR_STATE=open
+  FM_FAKE_GH_REPO_EXPECTED=o/r
   local out; out=$(FM_FAKE_GH_CALLS="$d/gh.calls" run_crew_state "$d" feat-open-pr)
   assert_contains "$out" "state: done" "passed run with open PR remains locally done"
   assert_contains "$out" "run passed: PR open (not merged/closed)" "live open PR state is reported"
   assert_not_contains "$out" "PR merged/closed" "open PR is never reported as merged/closed"
-  assert_grep 'pr view 1' "$d/gh.calls" "the linked GitHub PR was checked live"
+  assert_grep 'pr view 1 --repo o/r' "$d/gh.calls" "the linked GitHub PR was checked live in its own repo"
   pass "passed run with open PR is not falsely reported as merged/closed"
 }
 
@@ -739,15 +754,26 @@ test_terminal_passed_unverified_pr_not_reported_merged() {
 test_terminal_passed_mismatched_repo_pr_not_reported_merged() {
   reset_fakes
   local d; d=$(new_case passed-mismatched-repo-pr)
-  make_repo_on_branch "$d/wt" fm/feat-mismatched-pr other-owner/other-repo
+  make_repo_on_branch "$d/wt" fm/feat-mismatched-pr
   make_fakebin "$d" >/dev/null
   fm_write_meta "$d/state/feat-mismatched-pr.meta" "window=fm:fm-feat-mismatched-pr" "worktree=$d/wt" "kind=ship"
-  FM_FAKE_AXI_STATUS="$(run_passed fm/feat-mismatched-pr)"
+  FM_FAKE_AXI_STATUS="$(cat <<EOF
+run:
+  id: "01RUN"
+  branch: fm/feat-mismatched-pr
+  status: completed
+  head: "${FM_FAKE_RUN_HEAD:-abc1234}"
+  pr: "https://github.com/other-owner/other-repo/pull/9"
+  findings: none
+outcome: passed
+EOF
+)"
   FM_FAKE_GH_PR_STATE=merged
+  FM_FAKE_GH_REPO_EXPECTED=o/r
   local out; out=$(FM_FAKE_GH_CALLS="$d/gh.calls" run_crew_state "$d" feat-mismatched-pr)
   assert_contains "$out" "run passed: PR state unverified" "a stale link to a foreign repo is never trusted"
   assert_not_contains "$out" "PR merged/closed" "a mismatched repo PR is never reported as merged/closed"
-  [ ! -f "$d/gh.calls" ] || fail "gh-axi must not be queried for a PR in a repo the worktree does not match"
+  assert_grep 'pr view 9 --repo other-owner/other-repo' "$d/gh.calls" "the linked repo, not the worktree's own repo, was queried"
   pass "PR link pointing at a different repo is not falsely reported as merged/closed"
 }
 
@@ -759,6 +785,7 @@ test_terminal_passed_merged_pr_reports_merged() {
   fm_write_meta "$d/state/feat-merged-pr.meta" "window=fm:fm-feat-merged-pr" "worktree=$d/wt" "kind=ship"
   FM_FAKE_AXI_STATUS="$(run_passed fm/feat-merged-pr)"
   FM_FAKE_GH_PR_STATE=merged
+  FM_FAKE_GH_REPO_EXPECTED=o/r
   local out; out=$(run_crew_state "$d" feat-merged-pr)
   assert_contains "$out" "run passed: PR merged/closed" "live merged PR state permits the merge claim"
   pass "verified merged PR retains the merged/closed claim"
