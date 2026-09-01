@@ -426,7 +426,7 @@ nm_run_head_matches_worktree() {
 # completion, while non-GitHub PRs and unavailable GitHub reads stay explicit
 # without making a forge claim this helper cannot prove.
 nm_passed_run_detail() {
-  local pr_url identity number pr_out state
+  local pr_url identity repo_path number pr_out state remote_url remote_path
   pr_url=$(strip_quotes "$(nm_field pr)")
   if [ -z "$pr_url" ]; then
     printf 'run passed: local work complete'
@@ -445,14 +445,33 @@ nm_passed_run_detail() {
     printf 'run passed: PR state unverified'
     return
   fi
+  repo_path=${identity% *}
   number=${identity##* }
   if ! command -v gh-axi >/dev/null 2>&1; then
     printf 'run passed: PR state unverified'
     return
   fi
   # gh-axi resolves the repository from the current checkout and does not
-  # accept gh's -R override. Query from the crew worktree so the live PR state
-  # belongs to the project that produced this run.
+  # accept gh's -R override, so the stored PR's owner/repo must be proven to
+  # match the crew worktree's own remote before the number is trusted -
+  # otherwise a stale or foreign-fork link would silently report a
+  # same-numbered PR in the wrong repository.
+  remote_url=$(git -C "$WT" remote get-url origin 2>/dev/null) || {
+    printf 'run passed: PR state unverified'
+    return
+  }
+  remote_path=${remote_url%/}
+  remote_path=${remote_path%.git}
+  remote_path=$(printf '%s\n' "$remote_path" \
+    | sed -nE 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+/[^/]+)$#\2#p')
+  if [ -z "$remote_path" ] \
+    || [ "$(printf '%s' "$remote_path" | tr '[:upper:]' '[:lower:]')" \
+      != "$(printf '%s' "$repo_path" | tr '[:upper:]' '[:lower:]')" ]; then
+    printf 'run passed: PR state unverified'
+    return
+  fi
+  # Query from the crew worktree so the live PR state belongs to the project
+  # that produced this run, now that its identity is proven to match.
   pr_out=$(cd "$WT" && gh-axi pr view "$number" 2>/dev/null) || {
     printf 'run passed: PR state unverified'
     return

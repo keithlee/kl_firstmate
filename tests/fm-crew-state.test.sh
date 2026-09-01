@@ -39,10 +39,11 @@ fm_git_identity fmtest fmtest@example.invalid
 
 # A real git repo checked out on <branch>, so the helper's branch attribution
 # (git symbolic-ref) resolves like it would for a live crew worktree.
-make_repo_on_branch() {  # <dir> <branch>
-  local dir=$1 branch=$2
+make_repo_on_branch() {  # <dir> <branch> [origin-owner/repo]
+  local dir=$1 branch=$2 origin=${3:-o/r}
   mkdir -p "$dir"
   git -C "$dir" init -q
+  git -C "$dir" remote add origin "https://github.com/$origin" 2>/dev/null || true
   git -C "$dir" commit -q --allow-empty -m init
   git -C "$dir" checkout -q -b "$branch"
   # Real worktree HEAD for run head-binding (fixtures read FM_FAKE_RUN_HEAD).
@@ -733,6 +734,21 @@ test_terminal_passed_unverified_pr_not_reported_merged() {
   assert_contains "$out" "run passed: PR state unverified" "unverified PR state is explicit"
   assert_not_contains "$out" "PR merged/closed" "unverified PR is never reported as merged/closed"
   pass "unverified passed PR is not falsely reported as merged/closed"
+}
+
+test_terminal_passed_mismatched_repo_pr_not_reported_merged() {
+  reset_fakes
+  local d; d=$(new_case passed-mismatched-repo-pr)
+  make_repo_on_branch "$d/wt" fm/feat-mismatched-pr other-owner/other-repo
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-mismatched-pr.meta" "window=fm:fm-feat-mismatched-pr" "worktree=$d/wt" "kind=ship"
+  FM_FAKE_AXI_STATUS="$(run_passed fm/feat-mismatched-pr)"
+  FM_FAKE_GH_PR_STATE=merged
+  local out; out=$(FM_FAKE_GH_CALLS="$d/gh.calls" run_crew_state "$d" feat-mismatched-pr)
+  assert_contains "$out" "run passed: PR state unverified" "a stale link to a foreign repo is never trusted"
+  assert_not_contains "$out" "PR merged/closed" "a mismatched repo PR is never reported as merged/closed"
+  [ ! -f "$d/gh.calls" ] || fail "gh-axi must not be queried for a PR in a repo the worktree does not match"
+  pass "PR link pointing at a different repo is not falsely reported as merged/closed"
 }
 
 test_terminal_passed_merged_pr_reports_merged() {
@@ -1660,6 +1676,7 @@ test_top_level_fixing_done_log_stays_working
 test_terminal_passed
 test_terminal_passed_open_pr_not_reported_merged
 test_terminal_passed_unverified_pr_not_reported_merged
+test_terminal_passed_mismatched_repo_pr_not_reported_merged
 test_terminal_passed_merged_pr_reports_merged
 test_terminal_passed_local_only_stays_done
 test_terminal_failed
