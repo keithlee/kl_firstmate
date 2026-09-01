@@ -426,7 +426,7 @@ nm_run_head_matches_worktree() {
 # completion, while non-GitHub PRs and unavailable GitHub reads stay explicit
 # without making a forge claim this helper cannot prove.
 nm_passed_run_detail() {
-  local pr_url identity repo number pr_out state merged
+  local pr_url identity number pr_out state merged
   pr_url=$(strip_quotes "$(nm_field pr)")
   if [ -z "$pr_url" ]; then
     printf 'run passed: local work complete'
@@ -445,13 +445,15 @@ nm_passed_run_detail() {
     printf 'run passed: PR state unverified'
     return
   fi
-  repo=${identity% *}
   number=${identity##* }
   if ! command -v gh-axi >/dev/null 2>&1; then
     printf 'run passed: PR state unverified'
     return
   fi
-  pr_out=$(gh-axi pr view "$number" -R "$repo" 2>/dev/null) || {
+  # gh-axi resolves the repository from the current checkout and does not
+  # accept gh's -R override. Query from the crew worktree so the live PR state
+  # belongs to the project that produced this run.
+  pr_out=$(cd "$WT" && gh-axi pr view "$number" 2>/dev/null) || {
     printf 'run passed: PR state unverified'
     return
   }

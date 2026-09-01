@@ -719,7 +719,7 @@ test_terminal_passed_open_pr_not_reported_merged() {
   assert_contains "$out" "state: done" "passed run with open PR remains locally done"
   assert_contains "$out" "run passed: PR open (not merged/closed)" "live open PR state is reported"
   assert_not_contains "$out" "PR merged/closed" "open PR is never reported as merged/closed"
-  assert_grep 'pr view 1 -R o/r' "$d/gh.calls" "the linked GitHub PR was checked live"
+  assert_grep 'pr view 1' "$d/gh.calls" "the linked GitHub PR was checked live"
   pass "passed run with open PR is not falsely reported as merged/closed"
 }
 
